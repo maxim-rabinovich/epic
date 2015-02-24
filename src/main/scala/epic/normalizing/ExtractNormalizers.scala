@@ -12,12 +12,21 @@ object ExtractNormalizers extends App {
     p.words.count(x => x == "'s" || x(0).isLetterOrDigit) > maxLength
   }
 
+  print("Loading parser...")
   val parser = epic.parser.models.en.span.EnglishSpanParser.load()
+  print("done.\n")
 
+  print("Loading trees...")
   val tb = CommandLineParser.readIn[ProcessedTreebank](args)
-  val trainTrees = tb.trainTrees
-  val theTrees = trainTrees.toIndexedSeq.filterNot(sentenceIsTooLong(_, 60))
+  printf("done. [Loaded %d trees.]\n", tb.trainTrees.length)
 
+  val trainTrees = tb.trainTrees
+
+  print("Filtering trees...")
+  val theTrees = trainTrees.toIndexedSeq.filterNot(sentenceIsTooLong(_, 60))
+  printf("done. [Kept %d trees.]\n", theTrees.length)
+
+  printf("Computing normalizers...")
   val Zs : Array[Double] = new Array[Double](theTrees.length)
   var ctr : Int = 0
   for (tree <- theTrees) {
@@ -26,6 +35,7 @@ object ExtractNormalizers extends App {
 
     ctr += 1
   }
+  print("...done.\n")
 
   println("=====PRINTING FINAL NORMALIZERS=====")
   for (i <- 0 until Zs.length) {
