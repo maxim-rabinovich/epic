@@ -26,7 +26,7 @@ object ExtractNormalizers extends App {
   val theTrees = trainTrees.toIndexedSeq.filterNot(sentenceIsTooLong(_, 60))
   printf("done. [Kept %d trees.]\n", theTrees.length)
 
-  printf("Computing normalizers...")
+  printf("Computing normalizers...\n")
   val Zs : Array[Double] = new Array[Double](theTrees.length)
   var ctr : Int = 0
   for (tree <- theTrees) {
@@ -34,6 +34,8 @@ object ExtractNormalizers extends App {
     Zs(ctr) = parser.marginal(words).logPartition
 
     ctr += 1
+
+    if (ctr % 1000 == 0) { printf("Done with %d data points.\n", ctr) }
   }
   print("...done.\n")
 
