@@ -35,7 +35,7 @@ object ExtractNormalizers extends App {
 
     ctr += 1
 
-    printf("Done with %d data points.\n", ctr)
+    if (ctr % 1000 == 0) { printf("Done with %d data points.\n", ctr) }
   }
   print("...done.\n")
 
