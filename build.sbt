@@ -20,9 +20,8 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "junit" % "junit" % "4.5" % "test", 
-  "org.scalanlp" %% "epic-parser-en-span" % "2014.9.15",
-  "org.scalanlp" %% "breeze" % "0.11-M0",
+  "junit" % "junit" % "4.5" % "test",
+  "org.scalanlp" %% "breeze" % "0.12-SNAPSHOT",
   "org.scalanlp" %% "breeze-config" % "0.9.1",
   "org.scalanlp" %% "nak" % "1.3" intransitive(),
   "org.mapdb" % "mapdb" % "0.9.2",
@@ -103,6 +102,7 @@ mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
 {
   case PathList("org", "w3c", "dom", _) => MergeStrategy.first
   case PathList("javax", "xml", "stream", _ *) => MergeStrategy.first
+  case PathList("scala", "xml", _ *) => MergeStrategy.first
   case PathList("org", "cyberneko", "html", _ *) => MergeStrategy.first
   case PathList("scala", "xml", _ *) => MergeStrategy.first
   case PathList("org", "bouncycastle", _ *) => MergeStrategy.first
