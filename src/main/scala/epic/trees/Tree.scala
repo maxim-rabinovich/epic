@@ -133,10 +133,6 @@ object Tree {
       sb append ' '
     sb
   }
-
-
-
-
 }
 
 case class NaryTree[L](label: L, children: IndexedSeq[Tree[L]], span: Span) extends Tree[L] {

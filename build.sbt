@@ -1,6 +1,12 @@
-mport sbt.Keys._
+import sbt.Keys._
 import Version._
 import com.typesafe.sbt.osgi.SbtOsgi._
+
+javacOptions ++= Seq("-encoding", "UTF-8")
+
+javacOptions in test ++= Seq("-encoding", "UTF-8")
+
+excludeFilter in sources := "target/scala-2.11/src_managed/main/TreebankTokenizerImpl.java"
 
 lazy val extra = <url>http://scalanlp.org/</url>
   <licenses>
@@ -40,10 +46,11 @@ lazy val commonSettings = Seq(
     Library.jflex,
     Library.scalatest % "test",
     Library.scalacheck % "test",
-    Library.junit % "test"
+    Library.junit % "test",
+    Library.epicParser
   ),
   scalacOptions ++= Seq("-deprecation", "-language:_", "-optimize"),
-  javaOptions += "-Xmx4g",
+  javaOptions += "-Xmx2g",
   javaOptions += "-Xrunhprof:cpu=samples,depth=12",
   fork := true,
   publishMavenStyle := true,

@@ -16,7 +16,7 @@ object Version {
   val scalatest           = "2.1.3"
   val scalacheck          = "1.11.3"
   val junit               = "4.5"
-
+  val epicParser          = "2015.1.25"
 }
 
 object Library {
@@ -34,5 +34,6 @@ object Library {
   val scalatest           = "org.scalatest"              %% "scalatest"                            % Version.scalaTest
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                           % Version.scalacheck
   val junit               = "junit"                      %  "junit"                                % Version.junit
+  val epicParser          = "org.scalanlp"               %% "epic-parser-en-span"                  % Version.epicParser
 }
 
