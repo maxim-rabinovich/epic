@@ -34,7 +34,8 @@ import breeze.optimize.FirstOrderMinimizer.OptParams
 import epic.parser.ParseEval.Statistics
 import epic.features.LongestFrequentSuffixFeaturizer.LongestFrequentSuffix
 import epic.features.LongestFrequentSuffixFeaturizer
-
+import epic.util.Optional
+import epic.dense.AdadeltaGradientDescentDVD
 
 /**
  * The main entry point for training discriminative parsers.
@@ -53,6 +54,10 @@ object ParserTrainer extends epic.parser.ParserPipeline with LazyLogging {
                     @Help(text="path for a baseline parser for computing constraints. will be built automatically if not provided.")
                     parser: File = null,
                     opt: OptParams,
+                    @Help(text="Use Adadelta instead of Adagrad (hardcoded in here...)")
+                    useAdadelta: Boolean = false,
+                    @Help(text="Make training batches deterministic; useful for debugging / regression testing")
+                    determinizeTraining: Boolean = false,
                     @Help(text="How often to run on the dev set.")
                     iterationsPerEval: Int = 100,
                     @Help(text="How many iterations to run.")
@@ -71,8 +76,10 @@ object ParserTrainer extends epic.parser.ParserPipeline with LazyLogging {
                     checkGradient: Boolean = false,
                     @Help(text="check specific indices, in addition to doing a full search.")
                     checkGradientsAt: String = null,
-                    @Help(text="check specific indices, in addition to doing a full search.")
+                    @Help(text="Max parse length")
                     maxParseLength: Int = 70,
+                    @Help(text="Compute log likelihood on the training set")
+                    computeTrainLL: Boolean = true,
                     annotator: TreeAnnotator[AnnotatedLabel, String, AnnotatedLabel] = GenerativeParser.defaultAnnotator())
   protected val paramManifest = manifest[Params]
 
@@ -124,8 +131,10 @@ object ParserTrainer extends epic.parser.ParserPipeline with LazyLogging {
     val init = obj.initialWeightVector(randomize)
     if(checkGradient) {
       val cachedObj2 = new CachedBatchDiffFunction(new ModelObjective(model, theTrees.take(opt.batchSize), params.threads))
-        val indices = (0 until 10).map(i => if(i < 0) model.featureIndex.size + i else i)
+      val indices = (0 until 10).map(i => if(i < 0) model.featureIndex.size + i else i)
+      println("testIndices: " + indices)
       GradientTester.testIndices(cachedObj2, obj.initialWeightVector(randomize = true), indices, toString={(i: Int) => model.featureIndex.get(i).toString}, skipZeros = true)
+      println("test")
       GradientTester.test(cachedObj2, obj.initialWeightVector(randomize = true), toString={(i: Int) => model.featureIndex.get(i).toString}, skipZeros = false)
     }
 
@@ -143,9 +152,32 @@ object ParserTrainer extends epic.parser.ParserPipeline with LazyLogging {
 
 
     val name = Option(params.name).orElse(Option(model.getClass.getSimpleName).filter(_.nonEmpty)).getOrElse("DiscrimParser")
-    for ((state, iter) <- params.opt.iterations(cachedObj, init).take(maxIterations).zipWithIndex.tee(evalAndCache _)
+    val itr: Iterator[FirstOrderMinimizer[DenseVector[Double], BatchDiffFunction[DenseVector[Double]]]#State] = if (determinizeTraining) {
+      val scanningBatchesObj = cachedObj.withScanningBatches(params.opt.batchSize)
+      if (useAdadelta) {
+        println("OPTIMIZATION: Adadelta")
+        new AdadeltaGradientDescentDVD(params.opt.maxIterations).iterations(scanningBatchesObj, init).
+            asInstanceOf[Iterator[FirstOrderMinimizer[DenseVector[Double], BatchDiffFunction[DenseVector[Double]]]#State]]
+      } else {
+        println("OPTIMIZATION: Adagrad")
+        params.opt.iterations(scanningBatchesObj, init).asInstanceOf[Iterator[FirstOrderMinimizer[DenseVector[Double], BatchDiffFunction[DenseVector[Double]]]#State]]
+      }
+    } else {
+      if (useAdadelta) {
+        println("OPTIMIZATION: Adadelta")
+        new AdadeltaGradientDescentDVD(params.opt.maxIterations).iterations(cachedObj.withRandomBatches(params.opt.batchSize), init).
+            asInstanceOf[Iterator[FirstOrderMinimizer[DenseVector[Double], BatchDiffFunction[DenseVector[Double]]]#State]]
+      } else {
+        println("OPTIMIZATION: Adagrad")
+        params.opt.iterations(cachedObj, init)
+      }
+    }
+    for ((state, iter) <- itr.take(maxIterations).zipWithIndex.tee(evalAndCache _)
          if iter != 0 && iter % iterationsPerEval == 0 || evaluateNow) yield try {
       val parser = model.extractParser(state.x)
+      if (iter + iterationsPerEval >= maxIterations && computeTrainLL) {
+        computeLL(trainTrees, model, state.x)
+      }
       (s"$name-$iter", parser)
     } catch {
       case e: Exception => e.printStackTrace(); throw e
@@ -166,6 +198,21 @@ object ParserTrainer extends epic.parser.ParserPipeline with LazyLogging {
       false
     }
     
+  }
+  
+  def computeLL(trainTrees: IndexedSeq[TreeInstance[AnnotatedLabel, String]], model: Model[TreeInstance[AnnotatedLabel, String]], weights: DenseVector[Double]) {
+    println("Computing final log likelihood on the whole training set...")
+    val inf = model.inferenceFromWeights(weights).forTesting
+    val ll = trainTrees.par.aggregate(0.0)((currLL, trainTree) => { 
+      try {
+        val s = inf.scorer(trainTree)
+        currLL + inf.goldMarginal(s, trainTree).logPartition - inf.marginal(s, trainTree).logPartition
+      } catch {
+        case e: Exception => println("Couldn't parse")
+        currLL
+      }
+    }, _ + _)
+    println("Log likelihood on " + trainTrees.size + " examples: " + ll)
   }
 }
 

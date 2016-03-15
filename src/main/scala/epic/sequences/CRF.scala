@@ -8,7 +8,7 @@ import java.util
 import collection.mutable.ArrayBuffer
 import breeze.features.FeatureVector
 import epic.constraints.{LabeledSpanConstraints, TagConstraints}
-import epic.util.{NotProvided, Optional, CacheBroker}
+import epic.util.{Optional, CacheBroker}
 import breeze.optimize.FirstOrderMinimizer.OptParams
 import breeze.optimize.CachedBatchDiffFunction
 import epic.features.WordFeaturizer
@@ -58,8 +58,8 @@ object CRF {
   def buildSimple[L](data: IndexedSeq[TaggedSequence[L, String]],
                      startSymbol: L,
                      gazetteer: Gazetteer[Any, String] = Gazetteer.empty[Any, String],
-                     wordFeaturizer: Optional[WordFeaturizer[String]] = NotProvided,
-                     transitionFeaturizer: Optional[WordFeaturizer[String]] = NotProvided,
+                     wordFeaturizer: Optional[WordFeaturizer[String]] = None,
+                     transitionFeaturizer: Optional[WordFeaturizer[String]] = None,
                      opt: OptParams = OptParams(),
                      hashFeatures: Double = 1.0)(implicit cache: CacheBroker = CacheBroker()):CRF[L, String] = {
     val model: CRFModel[L, String] = new TaggedSequenceModelFactory[L](startSymbol,  gazetteer = gazetteer, wordFeaturizer = wordFeaturizer, transitionFeaturizer = transitionFeaturizer, hashFeatureScale = hashFeatures).makeModel(data)
@@ -356,7 +356,9 @@ object CRF {
         backPointer(i)(next) = currentArgMax
       }
     }
+
     val tags = ArrayBuffer[L]()
+
     def rec(end: Int, label: Int) {
       tags += scorer.labelIndex.get(label)
       if(end > 0) {
@@ -366,6 +368,7 @@ object CRF {
 
     }
     rec(length-1, (0 until numLabels).maxBy(forwardScores(length)(_)))
+    assert(tags.length == scorer.words.length, tags.reverse + " " + scorer.words)
 
     TaggedSequence(tags.reverse, scorer.words, id)
   }

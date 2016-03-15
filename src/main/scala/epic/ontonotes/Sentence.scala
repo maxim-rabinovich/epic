@@ -1,7 +1,7 @@
 package epic.ontonotes
 
+import epic.framework.Example
 import epic.trees._
-import nak.data.Example
 import epic.sequences.Segmentation
 import collection.mutable.ArrayBuffer
 import collection.mutable
@@ -26,7 +26,9 @@ case class Sentence(docId: String, index: Int,
   def speaker = annotations.speaker
   def srl = annotations.srl
 
-  def treeInstance(processor: StandardTreeProcessor) = TreeInstance(docId+"-treeInstance", processor(tree.map(_.treebankString)), words )
+  def treeInstance(processor: StandardTreeProcessor) = {
+    TreeInstance(docId+"-treeInstance", processor(tree), words)
+  }
 
   lazy val nerSegmentation: Segmentation[NerType.Value, String]  = {
     val sorted = ner.toIndexedSeq.sortBy((_: (DSpan, NerType.Value))._1.begin)

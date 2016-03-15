@@ -71,7 +71,7 @@ final scala.Tuple2<epic.trees.Span, epic.slab.Token> currentToken(String value) 
 %eofval{
   if(yychar() == acro_period) {
       acro_period = -2;
-  return new scala.Tuple2(new epic.trees.Span(epic.trees.Span.apply(yychar() - 1, yychar())), new epic.slab.Token("."));
+      return new scala.Tuple2(new epic.trees.Span(epic.trees.Span.apply(yychar() - 1, yychar())), new epic.slab.Token("."));
   } else {
     return null;
   }
@@ -82,13 +82,41 @@ THAI       = [\u0E00-\u0E59]
 // basic word: a sequence of digits & letters (includes Thai to enable ThaiAnalyzer to function)
 ALPHANUM   = ({LETTER}|{THAI}|[:digit:]|_)+
 
+// case insensitivity is useful sometimes
+a = [aA]
+b = [bB]
+c = [cC]
+d = [dD]
+e = [eE]
+f = [fF]
+g = [gG]
+h = [hH]
+i = [iI]
+j = [jJ]
+k = [kK]
+l = [lL]
+m = [mM]
+n = [nN]
+o = [oO]
+p = [pP]
+q = [qQ]
+r = [rR]
+s = [sS]
+t = [tT]
+u = [uU]
+v = [vV]
+w = [wW]
+x = [xX]
+y = [yY]
+z = [zZ]
+
 ALPHA      = ({LETTER}|¨)+
 
 NEWLINE = [\n\r]
 
 // acronyms: U.S.A., I.B.M., etc.
 // use a post-filter to remove dots
-ACRONYM    =  {LETTER} "." ({LETTER} ".")+
+ABBRNYM    =  {LETTER} "." ({LETTER} ".")+
 
 ACRONYM_DEP	= {ALPHANUM} "." ({ALPHANUM} ".")+
 
@@ -197,6 +225,15 @@ NUM        = ({ALPHANUM} {P} {HAS_DIGIT}
            | {ALPHANUM} {P} {HAS_DIGIT} ({P} {ALPHANUM} {P} {HAS_DIGIT})+
            | {HAS_DIGIT} {P} {ALPHANUM} ({P} {HAS_DIGIT} {P} {ALPHANUM})+)
 
+
+/* floating point literals */
+DoubleLiteral = ({FLit1}|{FLit2}|{FLit3}) {Exponent}?
+
+FLit1    = [0-9]+ \. [0-9]*
+FLit2    = \. [0-9]+
+FLit3    = [0-9]+
+Exponent = [eE] [+-]? [0-9]+
+
 // punctuation
 P	         = ("_"|"-"|"/"|"."|",")
 
@@ -241,6 +278,11 @@ LONG_END_PUNCT = [?!][?!1]+
 
 WORD = ({IRISH_O}?{ALPHANUM}+|[Qq]ur{Q}an)
 
+// http://www.englishleap.com/other-resources/abbreviations
+ABBR_TITLE = ({g}{e}{n}|{h}{o}{n}|{d}{r}|{m}{r}?{s}?|{r}{e}{v}|{p}{r}{o}{f}|{s}{t}|{j}{r}|{s}{r})
+ABBR_GEN = ({a}{l}|{c}{a}|{c}{o}|{i}{n}{c}|{l}{t}{d}|{e}{t}{c}|{v}{s}?|{e}{s}{t}|{f}{i}{g}|{h}{r}{s}?|{m}{t}|{d}{e}{p}{t}|{s}{q}|{o}{z}|{a}{v}{e}|{a}{s}{s}{n})
+ABBR = ({ABBR_TITLE}|{ABBR_GEN})
+
 
 %s OPEN_QUOTE POLISH_CONDITIONAL_MODE JUST_AFTER_PERIOD CLITIC_MODE
 
@@ -253,24 +295,19 @@ WORD = ({IRISH_O}?{ALPHANUM}+|[Qq]ur{Q}an)
 {URL}                                                         { return currentToken(); }
 
 // special words
-can / not                                                      {return currentToken();}
-Can / not                                                      {return currentToken();}
-lem / me                                                      {return currentToken();}
-Lem / me                                                      {return currentToken();}
-gon / na                                                      {return currentToken();}
-Gon / na                                                      {return currentToken();}
-gim / me                                                      {return currentToken();}
-Gim / me                                                      {return currentToken();}
-wan / na                                                      {return currentToken();}
-Wan / na                                                      {return currentToken();}
-got / ta                                                      {return currentToken();}
-Got / ta                                                      {return currentToken();}
+{c}an / not                                                      {return currentToken();}
+{l}em / me                                                      {return currentToken();}
+{g}on / na                                                      {return currentToken();}
+{g}im / me                                                      {return currentToken();}
+{w}an / na                                                      {return currentToken();}
+{g}ot / ta                                                      {return currentToken();}
 
 // acronyms that end a sentence
 
 // we can't ask if we're at EOF, so this is a hack to say append a period if we hit EOF and just generated a period
-{LETTER}+\.{LETTER}+.                                      {acro_period = yychar() + zzMarkedPos; return currentToken();}
-(etc|v|vs).                                                      {acro_period = yychar() + zzMarkedPos; return currentToken();}
+{LETTER}+\.({LETTER}+\.)+       {acro_period = yychar() + yylength(); return currentToken();}
+{LETTER}+\./{WHITESPACE}        {return currentToken();}
+{ABBR}\.                        {acro_period = yychar() + yylength();  return currentToken();}
 
 // contractions and other clitics
 {INIT_CLITIC}                                           {return currentToken();}
@@ -297,6 +334,8 @@ d{Q} / ye                                                        {return current
 <OPEN_QUOTE>\"                                                 { yybegin(YYINITIAL); return currentToken("''"); }
 “                                                 { yybegin(YYINITIAL); return currentToken("``"); }
 ”                                                 { yybegin(YYINITIAL); return currentToken("''"); }
+\"/.*{ALPHANUM}+                                  { yybegin(OPEN_QUOTE); return currentToken("``"); }
+\"                                                { yybegin(YYINITIAL); return currentToken("''"); }
 
 
 
@@ -307,7 +346,7 @@ d{Q} / ye                                                        {return current
 {TWITTER_HANDLE}                                                     { return currentToken(); }
 {TWITTER_HASHTAG}                                                     { return currentToken(); }
 {WORD}                                        {return currentToken();}
-{ACRONYM}                                                      { return currentToken(); }
+{ABBRNYM}                                                      { return currentToken(); }
 {COMPANY}                                                      { return currentToken(); }
 {EMAIL}                                                        { return currentToken(); }
 {HOST}                                                         { return currentToken(); }
@@ -324,6 +363,7 @@ d{Q} / ye                                                        {return current
 {LONG_END_PUNCT}                                        { return currentToken();}
 {PUNCT}                                               { return currentToken();}
 {EMOTICON}                                          { return currentToken();}
+{DASH}{DoubleLiteral}                               { return currentToken();}
 .                                                   { return currentToken();}
 
 

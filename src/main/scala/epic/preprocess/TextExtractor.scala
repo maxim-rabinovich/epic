@@ -21,6 +21,8 @@ import org.xml.sax._
  * @author dlwh
  **/
 object TextExtractor {
+  if (!hasTika)
+    throw new RuntimeException("Apache Tika is an optional dependency and is not on the classpath")
 
   def extractText(url: URL, extractMainContentOnly: Boolean = true) = loadSlab(url, extractMainContentOnly).content
 
@@ -90,7 +92,7 @@ object TextExtractor {
       }
     }
     val handler = if(extractMainContentOnly) {
-      new BoilerpipeContentHandler(textHandler) {
+      new BoilerpipeContentHandler(textHandler, ArticleExtractor.getInstance()) {
         // stupid handler doesn't pass whitespace
         /*
         override def ignorableWhitespace(ch: Array[Char], start: Int, length: Int): Unit = {
@@ -126,7 +128,7 @@ object TextExtractor {
 
     val content = textHandler.toString.trim
 
-    Slab(content).++(Iterator(Span(0, content.length) -> epic.slab.Source(url)))
+    Slab(content).addLayer(Span(0, content.length) -> epic.slab.Source(url))
   }
 
 
@@ -263,5 +265,14 @@ import scala.xml._
 
   }
 
+  def hasTika = {
+    try {
+      Class.forName(classOf[Tika].getName)
+      true
+    }
+    catch {
+      case _: Any => false
+    }
+  }
 
 }

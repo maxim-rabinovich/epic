@@ -315,9 +315,10 @@ object IndexedSpanFeaturizer {
 
   
 case class ExtraParams(useHackyLexicalFeatures:Boolean = false,
-                      hackyLexicalFeatureDesc:String = "",
-                      useMorph:Boolean = false,
-                      pathsToMorph:String = "")
+                       hackyLexicalFeatureDesc:String = "",
+                       useMorph:Boolean = false,
+                       useTagSpanShape:Boolean = false,
+                       pathsToMorph:String = "")
   
 case class SpanModelFactory(@Help(text=
                               """The kind of annotation to do on the refined grammar. Default uses just parent annotation.
@@ -338,10 +339,11 @@ You can also epic.trees.annotations.KMAnnotator to get more or less Klein and Ma
                             useNGrams:Boolean = false,
                             maxNGramOrder:Int = 2,
                             useGrammar: Boolean = true,
+                            useChildFeats: Boolean = false,
                             useFullShape: Boolean = false,
                             useSplitShape: Boolean = false,
-                            posFeaturizer: Optional[WordFeaturizer[String]] = NotProvided,
-                            spanFeaturizer: Optional[SplitSpanFeaturizer[String]] = NotProvided,
+                            posFeaturizer: Optional[WordFeaturizer[String]] = None,
+                            spanFeaturizer: Optional[SplitSpanFeaturizer[String]] = None,
                             extraParams: ExtraParams = ExtraParams()) extends ParserModelFactory[AnnotatedLabel, String] with SafeLogging {
   
   type MyModel = SpanModel[AnnotatedLabel, AnnotatedLabel, String]
@@ -387,8 +389,8 @@ You can also epic.trees.annotations.KMAnnotator to get more or less Klein and Ma
     if(useNGrams)
       span += ngramF
 
-//    if(useTagSpanShape)
-//      span += tagSpanShape
+    if(useTagSpanShape)
+      span += tagSpanShape
 
     if(useFullShape)
       span += fullShape
@@ -399,7 +401,23 @@ You can also epic.trees.annotations.KMAnnotator to get more or less Klein and Ma
     
     
     def labelFeaturizer(l: AnnotatedLabel) = Set(l, l.baseAnnotatedLabel).toSeq
-    def ruleFeaturizer(r: Rule[AnnotatedLabel]) = if(useGrammar) Set(r, r.map(_.baseAnnotatedLabel)).toSeq else if(r.isInstanceOf[UnaryRule[AnnotatedLabel]]) Set(r.parent, r.parent.baseAnnotatedLabel).toSeq else Seq.empty
+    
+//    def ruleFeaturizer(r: Rule[AnnotatedLabel]) = if(useGrammar) Set(r, r.map(_.baseAnnotatedLabel)).toSeq else if(r.isInstanceOf[UnaryRule[AnnotatedLabel]]) Set(r.parent, r.parent.baseAnnotatedLabel).toSeq else Seq.empty
+    def ruleFeaturizer(r: Rule[AnnotatedLabel]) = if(useGrammar) {
+      if (useChildFeats && r.isInstanceOf[BinaryRule[AnnotatedLabel]]) {
+        Set(r,
+            r.map(_.baseAnnotatedLabel),
+            new LeftChildFeature(r.asInstanceOf[BinaryRule[AnnotatedLabel]].left),
+            new RightChildFeature(r.asInstanceOf[BinaryRule[AnnotatedLabel]].right)).toSeq
+      } else {
+        Set(r, r.map(_.baseAnnotatedLabel)).toSeq
+      }
+    } else if(r.isInstanceOf[UnaryRule[AnnotatedLabel]]) {
+      Set(r.parent, r.parent.baseAnnotatedLabel).toSeq
+    } else {
+      Seq.empty
+    }
+    
     
     val featurizer = new ProductionFeaturizer[AnnotatedLabel, AnnotatedLabel, String](xbarGrammar, indexedRefinements,
       lGen=labelFeaturizer,
@@ -584,15 +602,24 @@ case class LatentSpanModelFactory(inner: SpanModelFactory,
 object SpanModelFactory {
   def goodFeaturizer[L](wordCounts: Counter2[AnnotatedLabel, String, Double],
                         commonWordThreshold: Int = 100,
-                        useShape: Boolean = true) = {
+                        useShape: Boolean = true,
+                        useLfsuf: Boolean = true,
+                        useBrown: Boolean = false,
+                        useMostSparseIndicators: Boolean = false) = {
     val dsl = new WordFeaturizer.DSL(wordCounts, commonWordThreshold) with SurfaceFeaturizer.DSL with SplitSpanFeaturizer.DSL
     import dsl._
 
     // class(split + 1)
-    val baseCat = lfsuf
-
+    var baseCat: WordFeaturizer[String] = new ZeroFeaturizer[String];
+    if (useLfsuf) {
+      baseCat += lfsuf
+    }
+    if (useBrown) {
+      baseCat += new BrownClusterFeaturizer(Array(4, 10))
+    }
+    
     val leftOfSplit: SplitSpanFeaturizer[String] =  ((baseCat)(-1)apply (split))
-
+    
     var featurizer: SplitSpanFeaturizer[String] = zeroSplit[String]
     featurizer += baseCat(begin)
     featurizer += baseCat(end-1)
@@ -601,6 +628,14 @@ object SpanModelFactory {
     featurizer += leftOfSplit
     featurizer += baseCat(split)
     featurizer += length
+    if (useMostSparseIndicators) {
+      featurizer += baseCat(begin-2)
+      featurizer += baseCat(end-2)
+      featurizer += baseCat(begin+1)
+      featurizer += baseCat(end+1)
+      featurizer +=  ((baseCat)(-2)apply (split))
+      featurizer +=  ((baseCat)(1)apply (split))
+    }
 
     featurizer += distance[String](begin, split)
     featurizer += distance[String](split, end)
@@ -609,18 +644,23 @@ object SpanModelFactory {
     featurizer
   }
 
-  def defaultPOSFeaturizer(annWords: Counter2[AnnotatedLabel, String, Double]): WordFeaturizer[String] = {
+  def defaultPOSFeaturizer(annWords: Counter2[AnnotatedLabel, String, Double], useBrown: Boolean = false): WordFeaturizer[String] = {
     {
       val dsl = new WordFeaturizer.DSL(annWords)
       import dsl._
-      unigrams(word, 1) + suffixes() + prefixes()
+      if (useBrown) {
+        val brown = new BrownClusterFeaturizer(Array(4, 10))
+        unigrams(brown, 1) + unigrams(word, 1) + suffixes() + prefixes()
+      } else {
+        unigrams(word, 1) + suffixes() + prefixes()
+      }
     }
   }
 
   def buildSimple(trees: IndexedSeq[TreeInstance[AnnotatedLabel, String]],
                   annotator: TreeAnnotator[AnnotatedLabel, String, AnnotatedLabel] = GenerativeParser.defaultAnnotator(),
-                  posFeaturizer: Optional[WordFeaturizer[String]] = NotProvided,
-                  spanFeaturizer: Optional[SplitSpanFeaturizer[String]] = NotProvided,
+                  posFeaturizer: Optional[WordFeaturizer[String]] = None,
+                  spanFeaturizer: Optional[SplitSpanFeaturizer[String]] = None,
                   opt: OptParams = OptParams())(implicit cache: CacheBroker) = {
     val (topo, lexicon) = XbarGrammar().xbarGrammar(trees)
     val initialParser =  GenerativeParser.annotatedParser(topo, lexicon, annotator, trees)
@@ -636,6 +676,7 @@ object SpanModelFactory {
       new CachedChartConstraintsFactory[AnnotatedLabel, String](uncached)
     }
 
+    
     val mf = new SpanModelFactory(annotator = annotator, posFeaturizer = posFeaturizer, spanFeaturizer = spanFeaturizer).make(trees, topo, lexicon, constraints)
 
     val mobj = new ModelObjective(mf, trees)

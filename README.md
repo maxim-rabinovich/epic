@@ -86,7 +86,7 @@ val parser = epic.models.ParserSelector.loadParser("en").get // or another 2 let
 
 val tree = parser(sentence)
 
-println(tree.render(words))
+println(tree.render(sentence))
 
 ```
 
@@ -112,7 +112,7 @@ println(tags.render)
 
 #### Named Entity Recognition
 
-Using a named entity recognizer is similar to using a pos tagger: load a model, tokenize some text, run the recognizer. All NER systems are (currently) [linear chain semi-Markov conditional random fields](http://people.cs.umass.edu/~mccallum/papers/crf-tutorial.pdf), or SemiCRFs. (You don't need to understand them to use them. They are just a machine learning method for segmenting text into fields.
+Using a named entity recognizer is similar to using a pos tagger: load a model, tokenize some text, run the recognizer. All NER systems are (currently) [linear chain semi-Markov conditional random fields](http://people.cs.umass.edu/~mccallum/papers/crf-tutorial.pdf), or SemiCRFs. (You don't need to understand them to use them. They are just a machine learning method for segmenting text into fields.)
 
 ```scala
 val ner = epic.models.deserialize[SemiCRF[AnnotatedLabel, String]](path)
@@ -305,19 +305,19 @@ For training a SpanModel, the following configurations are known to work well in
 * English:
 ```bash
 epic.parser.models.ParserTrainer \
-  --modelFactory epic.parser.models.SpanModelFactory
-  --cache.path constraints.cache
-  --opt.useStochastic
-  --opt.regularization 5
-  --opt.batchSize 500
-  --alpha 0.1
-  --maxIterations 1000
-  --trainer.modelFactory.annotator epic.trees.annotations.PipelineAnnotator
-  --ann.0 epic.trees.annotations.FilterAnnotations
-  --ann.1 epic.trees.annotations.ForgetHeadTag
-  --ann.2 epic.trees.annotations.Markovize
-  --vertical 1
-  --horizontal 0
+  --modelFactory epic.parser.models.SpanModelFactory \
+  --cache.path constraints.cache \
+  --opt.useStochastic \
+  --opt.regularization 5 \
+  --opt.batchSize 500 \
+  --alpha 0.1 \
+  --maxIterations 1000 \
+  --trainer.modelFactory.annotator epic.trees.annotations.PipelineAnnotator \
+  --ann.0 epic.trees.annotations.FilterAnnotations \
+  --ann.1 epic.trees.annotations.ForgetHeadTag \
+  --ann.2 epic.trees.annotations.Markovize \
+  --vertical 1 \
+  --horizontal 0 \
   --treebank.path /home/dlwh/wsj/
 ```
 * Other (SPMRL languages):

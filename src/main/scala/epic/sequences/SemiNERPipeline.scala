@@ -5,9 +5,8 @@ import breeze.config.{Configuration, CommandLineParser}
 import epic.ontonotes.{NerType, ConllOntoReader}
 import collection.mutable.ArrayBuffer
 import breeze.linalg.DenseVector
-import epic.framework.ModelObjective
+import epic.framework.{Example, ModelObjective}
 import breeze.optimize._
-import nak.data.Example
 import breeze.util.Encoder
 import epic.trees.Span
 import breeze.optimize.FirstOrderMinimizer.OptParams
@@ -15,6 +14,7 @@ import breeze.util.Implicits._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import epic.preprocess.TreebankTokenizer
 import epic.corpora.CONLLSequenceReader
+import epic.framework.Example
 
 
 /**
@@ -29,19 +29,29 @@ object SemiNerPipeline extends LazyLogging {
                     iterPerEval: Int = 20,
                     nthreads: Int = -1,
                     opt: OptParams,
-                    checkGradient: Boolean = false)
+                    checkGradient: Boolean = false,
+                    lowerCaseAndStripPunct: Boolean = false,
+                    exclude: String = "")
 
   def main(args: Array[String]) {
     val params = CommandLineParser.readIn[Params](args)
     logger.info("Command line arguments for recovery:\n" + Configuration.fromObject(params).toCommandLineString)
+    val excludeSet = params.exclude.split(",").map(NerType.fromString(_)).toSet
     val (train, test) = {
-      val instances =  for {
+      var instances =  for {
         file <- params.path.listFiles take params.nfiles
         doc <- ConllOntoReader.readDocuments(file)
         s <- doc.sentences
       } yield s.nerSegmentation
+
+      instances = instances.map(_.filterLabels(x => !excludeSet(x)))
+
+      if (params.lowerCaseAndStripPunct) {
+        instances = instances.map(_.filterWords(_.exists(_.isLetterOrDigit)).mapWords(_.toLowerCase))
+      }
       instances.splitAt(instances.length * 9 / 10)
     }
+
 
     val gazetteer =  None//Gazetteer.ner("en")
 
