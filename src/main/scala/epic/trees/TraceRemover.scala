@@ -8,6 +8,10 @@ package epic.trees
 class TraceRemover[T, W](emptyCategory: T=>Boolean) extends (Tree[T] =>Tree[T]) {
   def apply(tree: Tree[T]):Tree[T] = {
     def rec(tree: Tree[T]):Option[Tree[T]] = {
+      println(tree.toString)
+      println()
+      System.out.flush()
+
       if (emptyCategory(tree.label) || tree.span.begin == tree.span.end) {
         None
       } else if (tree.children.length == 0) {
@@ -24,5 +28,4 @@ class TraceRemover[T, W](emptyCategory: T=>Boolean) extends (Tree[T] =>Tree[T]) 
 
     rec(tree).get
   }
-
 }
