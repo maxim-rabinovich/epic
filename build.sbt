@@ -46,8 +46,7 @@ lazy val commonSettings = Seq(
     Library.jflex,
     Library.scalatest % "test",
     Library.scalacheck % "test",
-    Library.junit % "test",
-    Library.epicParser
+    Library.junit % "test"
   ),
   scalacOptions ++= Seq("-deprecation", "-language:_", "-optimize"),
   javaOptions += "-Xmx2g",

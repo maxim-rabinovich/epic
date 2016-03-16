@@ -13,7 +13,8 @@ object ExtractNormalizers extends App {
   }
 
   print("Loading parser...")
-  val parser = epic.parser.models.en.span.EnglishSpanParser.load()
+  val parser = epic.models.ParserSelector.loadParser("en").get
+  // epic.parser.models.en.span.EnglishSpanParser.load()
   print("done.\n")
 
   print("Loading trees...")
